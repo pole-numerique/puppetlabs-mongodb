@@ -17,7 +17,14 @@ Puppet::Type.type(:mongodb_user).provide(:mongodb) do
   end
 
   def create
-    mongo(@resource[:database], '--eval', "db.system.users.insert({user:\"#{@resource[:name]}\", pwd:\"#{@resource[:password_hash]}\", roles: #{@resource[:roles].inspect}})")
+#Puppet.warning(@resource.parent.parent.instance_variables.map{|var| puts [var, @resource.parent.parent.instance_variable_get(var)].join(":")})
+    # before MongoDB 2.6 :
+    #mongo(@resource[:database], '--eval', "db.system.users.insert({user:\"#{@resource[:name]}\", pwd:\"#{@resource[:password_hash]}\", roles: #{@resource[:roles].inspect}})")
+    # since MongoDB 2.6, users are stored in admin db and credentials and roles are more complex
+    roleMaps = []
+    @resource[:roles].each { |role| roleMaps << {"role"=>role,"db"=>@resource[:database]} }
+    require 'json'
+    mongo("admin", '--eval', "db.system.users.insert({\"_id\":\"#{@resource[:database]}.#{@resource[:name]}\", user:\"#{@resource[:name]}\", credentials:{\"MONGODB-CR\":\"#{@resource[:password_hash]}\"}, db:\"#{@resource[:database]}\", roles:#{roleMaps.to_json}})")
   end
 
   def destroy
