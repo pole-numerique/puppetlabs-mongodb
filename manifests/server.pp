@@ -55,6 +55,7 @@ class mongodb::server (
   $rest            = undef,
   $slowms          = undef,
   $keyfile         = undef,
+  $is_primary       = undef, # compute it by = $replset_members[0] == $mongodb_host, used only to know whether to create admin user in prestart
   $set_parameter   = undef,
   $syslog          = undef,
 

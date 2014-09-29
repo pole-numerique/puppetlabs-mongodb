@@ -19,9 +19,10 @@ class mongodb::server::init_admin {
   #$master          = $mongodb::server::master
   #$slave           = $mongodb::server::slave
   $replset         = $mongodb::server::replset
+  $is_primary       = $mongodb::server::is_primary # compute it by = $replset_members[0] == $mongodb_host, used only to know whether to create admin user in prestart
   #$bind_ip         = $mongodb::server::bind_ip
 
-  if (($ensure == 'present' or $ensure == true) and $auth) {
+  if (($ensure == 'present' or $ensure == true) and $auth and (!$replset or $is_primary)) {
     #$mongodb_not_inited_generate_res = generate('/bin/sh', '-c', "res=`/usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" 2>/dev/null` ; echo -n $res && exit 0")
     #$mongodb_inited_generate_res = generate('/bin/sh', '-c', "/usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" >/dev/null && echo -n success || echo -n failed")
     $mongodb_not_inited_generate_res = generate('/bin/sh', '-c', "res=eval /usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" 2>/dev/null ; echo -n $res && exit 0")
