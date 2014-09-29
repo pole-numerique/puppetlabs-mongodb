@@ -5,6 +5,9 @@ class mongodb::server (
   $user             = $mongodb::params::user,
   $group            = $mongodb::params::group,
 
+  $admin_user        = $mongodb::params::admin_user,
+  $admin_password    = $mongodb::params::admin_password,
+
   $config           = $mongodb::params::config,
   $dbpath           = $mongodb::params::dbpath,
   $pidfilepath      = $mongodb::params::pidfilepath,
@@ -67,6 +70,7 @@ class mongodb::server (
     anchor { 'mongodb::server::start': }->
     class { 'mongodb::server::install': }->
     class { 'mongodb::server::config': }->
+    class { 'mongodb::server::init_admin': }->
     class { 'mongodb::server::service': }->
     anchor { 'mongodb::server::end': }
   } else {

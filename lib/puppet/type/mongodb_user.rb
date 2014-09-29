@@ -12,6 +12,14 @@ Puppet::Type.newtype(:mongodb_user) do
   newparam(:name, :namevar=>true) do
     desc "The name of the user."
   end
+  
+  newproperty(:admin_user) do
+    desc 'The admin user to connect with'
+  end
+  
+  newproperty(:admin_password) do
+    desc 'The password of the admin user to connect with'
+  end
 
   newparam(:database) do
     desc "The user's target database."
@@ -45,11 +53,18 @@ Puppet::Type.newtype(:mongodb_user) do
     end
   end
 
+  newproperty(:password) do
+    desc "The plain text password of the user."
+    #defaultto do
+    #  fail("Property 'password' must be set to create users in 2.6. Use mongodb_password() for creating hash.")
+    #end
+  end
+
   newproperty(:password_hash) do
     desc "The password hash of the user. Use mongodb_password() for creating hash."
-    defaultto do
-      fail("Property 'password_hash' must be set. Use mongodb_password() for creating hash.")
-    end
+    #defaultto do
+    #  fail("Property 'password_hash' must be set. Use mongodb_password() for creating hash.")
+    #end
     newvalue(/^\w+$/)
   end
 

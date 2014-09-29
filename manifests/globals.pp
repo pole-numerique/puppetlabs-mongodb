@@ -18,6 +18,9 @@ class mongodb::globals (
   $version              = undef,
 
   $manage_package_repo  = undef,
+  
+  $admin_user        = undef,
+  $admin_password        = undef,
 ) {
 
   # Setup of the repo only makes sense globally, so we are doing it here.

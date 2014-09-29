@@ -1,5 +1,14 @@
 # mongodb puppet module
 
+This fork supports MongoDB 2.6 in the case of auth mode and authentified replica set.
+TODO still :
+- support again MongoDB 2.4 and less (according to version number),
+- an full example of using it in auth mode & auth'd replset. In short, the admin_user
+must be created BEFORE "class { '::mongodb::server':" and WITHOUT replset conf.
+- some cleanup
+
+------
+
 [![Build Status](https://travis-ci.org/puppetlabs/puppetlabs-mongodb.png?branch=master)](https://travis-ci.org/puppetlabs/puppetlabs-mongodb)
 
 ####Table of Contents

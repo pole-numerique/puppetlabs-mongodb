@@ -16,6 +16,14 @@ Puppet::Type.newtype(:mongodb_replset) do
   newparam(:name) do
     desc "The name of the replicaSet"
   end
+  
+  newproperty(:admin_user) do
+    desc 'The admin user to connect with'
+  end
+  
+  newproperty(:admin_password) do
+    desc 'The password of the admin user to connect with'
+  end
 
   newproperty(:members, :array_matching => :all) do
     desc "The replicaSet members"

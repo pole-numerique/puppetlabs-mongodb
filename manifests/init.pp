@@ -37,6 +37,9 @@ class mongodb (
   # Deprecated parameters
   $enable_10gen    = undef,
 
+  $admin_user       = $mongodb::params::admin_user,
+  $admin_password   = $mongodb::params::admin_password,
+  
   $init            = $mongodb::params::service_provider,
   $location        = '',
   $packagename     = undef,

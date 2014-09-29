@@ -7,6 +7,14 @@ Puppet::Type.newtype(:mongodb_database) do
     desc "The name of the database."
     newvalues(/^\w+$/)
   end
+  
+  newproperty(:admin_user) do
+    desc 'The admin user to connect with'
+  end
+  
+  newproperty(:admin_password) do
+    desc 'The password of the admin user to connect with'
+  end
 
   newparam(:tries) do
     desc "The maximum amount of two second tries to wait MongoDB startup."
