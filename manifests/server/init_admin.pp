@@ -52,19 +52,34 @@ class mongodb::server::init_admin {
     # (so it couldn't be done merely with a mongodb_user)
     # see http://docs.mongodb.org/manual/tutorial/deploy-replica-set-with-auth/ 
     # NB. beware of rights ! of files (pid, log, nohup log), and sudo as user required else error "[initandlisten] exception in initAndListen: 10309 Unable to create/open lock file: /var/lib/mongodb/mongod.lock errno:13 Permission denied Is a mongod instance already running?, terminating"
-    command => "/bin/true ; kill `cat /tmp/mongod_prestart.pid` ; rm -f /var/lib/mongodb/mongod.lock ; \
-        sudo -u $user nohup sh -c \"/usr/bin/mongod --pidfilepath /tmp/mongod_prestart.pid -f /etc/mongod_prestart.conf\" &> /var/log/mongodb/mongodb_prestart_nohup.log & \
-        /usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" 2>/dev/null && kill `cat /tmp/mongod_prestart.pid` && exit 0 ;
-        /usr/bin/mongo admin --quiet --eval \"db.createUser({ user: \\\"${admin_user}\\\", pwd: \\\"${admin_password}\\\", \
+    command => "/bin/true ; if [ -f \"/etc/init.d/mongod\" ]; then /etc/init.d/mongod stop ; rm -f /var/lib/mongodb/mongod.lock ; fi ; \
+        echo starting up after checking if needed ; \
+        /usr/bin/mongo admin --quiet --eval \"db.getMongo()\" 2>/dev/null | grep \"couldn't connect\" && sudo -u $user nohup sh -c \"/usr/bin/mongod --pidfilepath /tmp/mongod_prestart.pid -f /etc/mongod_prestart.conf\" &> /var/log/mongodb/mongodb_prestart_nohup.log & \
+        echo waiting to be up ; \
+        sleep 5 ;
+        res=\"ailed\" ; while [ \"$res\" != \"\" ] ; do echo sleep ; sleep 1 ; res=$(/usr/bin/mongo admin --quiet --eval \"db.getMongo()\" 2>/dev/null | grep \"ailed\") ; echo $res ; done ;
+        echo creating user ; \
+        res=eval /usr/bin/mongo admin --quiet --eval \"db.createUser({ user: \\\"${admin_user}\\\", pwd: \\\"${admin_password}\\\", \
         roles: [ { role: \\\"userAdminAnyDatabase\\\", db: \\\"admin\\\" }, { role: \\\"dbAdminAnyDatabase\\\", db: \\\"admin\\\" }, \
         { role: \\\"readWriteAnyDatabase\\\", db: \\\"admin\\\" }, { role: \\\"clusterAdmin\\\", db: \\\"admin\\\" }, \
-        { role: \\\"root\\\", db: \\\"admin\\\" } ] })\" \
-        && kill `cat /tmp/mongod_prestart.pid` && rm -f /var/lib/mongodb/mongod.lock  && exit 0 ; exit 1",
-        # kill pid rather than /etc/init.d/mongod stop if consecutive "apply"s and better than ps -ef | grep \"mongod\" | awk '{print \$2}' | xargs kill which is hard to follow on
+        { role: \\\"root\\\", db: \\\"admin\\\" } ] })\" ; \
+        echo res \"$res\" ; \
+        /usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" || exit 1 ; \
+        echo admin user created ; kill `cat /tmp/mongod_prestart.pid` ; rm -f /var/lib/mongodb/mongod.lock /tmp/mongod_prestart.pid ; echo success ; exit 0",
+        # grep for auth failed and Failed to connect
+        # kill `cat /tmp/mongod_prestart.pid` rather than /etc/init.d/mongod stop if consecutive "apply"s and better than ps -ef | grep \"mongod\" | awk '{print \$2}' | xargs kill which is hard to follow on
         ## /tmp/mongod_prestart.pid
         ##sudo -u $user nohup /usr/bin/mongod --smallfiles --auth --replSet $replset --dbpath /var/lib/mongodb --logpath=/var/log/mongodb/mongodb_prestart.log &> /var/log/mongodb/mongodb_prestart_nohup.log & \
-    tries => 10,
-    try_sleep => 1,
+        #/usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" 2>/dev/null | grep -v ailed && echo actually inited && kill `cat /tmp/mongod_prestart.pid` && echo killed mongodb && exit 0 ;
+        #echo res \"$res\" ; \
+        ##already_exists=\"\" ; echo \"$res\" | grep \"already exists\" && already_exists=\"already exists\" ; \
+        #if [ \"$already_exists\" != \"\" ] ; then echo already exists ; kill `cat /tmp/mongod_prestart.pid` ; ps -ef | grep \"mongod\" | awk '{print \$2}' | xargs kill ; rm -f /var/lib/mongodb/mongod.lock /tmp/mongod_prestart.pid ; echo success ; exit 0 ; fi ; \ 
+        #successful=\"\" ; echo \"$res\" | grep Successfully && successful=\"Successfully\" ; \
+        #if [ \"$successful\" != \"\" ] ; then echo admin user created ; kill `cat /tmp/mongod_prestart.pid` ; ps -ef | grep \"mongod\" | awk '{print \$2}' | xargs kill ; rm -f /var/lib/mongodb/mongod.lock /tmp/mongod_prestart.pid ; echo success ; exit 0 ; fi ; \
+        #echo failure && exit 1",
+        #echo admin user created ; echo bb `ps -ef | grep \"mongod\" | grep -v \"sudo\" | grep -v \"sh\" | grep \"pidfilepath\" | grep -v \"grep\"` ; ps -ef | grep \"mongod\" | grep -v \"sudo\" | grep -v \"sh\" | grep \"pidfilepath\" | grep -v \"grep\" | awk '{print \$2}' ; rm -f /var/lib/mongodb/mongod.lock /tmp/mongod_prestart.pid ; echo success ; exit 0",
+    ######tries => 10,
+    ######try_sleep => 1,
     logoutput => true,
     #timeout => 300,
     require => File['/etc/mongod_prestart.conf'],
