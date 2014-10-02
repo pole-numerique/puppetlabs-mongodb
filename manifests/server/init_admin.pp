@@ -23,17 +23,17 @@ class mongodb::server::init_admin {
   #$bind_ip         = $mongodb::server::bind_ip
 
   if (($ensure == 'present' or $ensure == true) and $auth and (!$replset or $is_primary)) {
-    #$mongodb_not_inited_generate_res = generate('/bin/sh', '-c', "res=`/usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" 2>/dev/null` ; echo -n $res && exit 0")
+    #$mongodb_not_inited_generate_res = generate('/bin/sh', '-c', "res=`/usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" 2>/dev/null` ; echo -n \$res && exit 0")
     #$mongodb_inited_generate_res = generate('/bin/sh', '-c', "/usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" >/dev/null && echo -n success || echo -n failed")
-    $mongodb_not_inited_generate_res = generate('/bin/sh', '-c', "res=eval /usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" 2>/dev/null ; echo -n $res && exit 0")
+    ##$mongodb_not_inited_generate_res = generate('/bin/sh', '-c', "res=eval /usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" 2>/dev/null ; echo -n \$res && exit 0")
     # NB. if no grep, generate fails because internal command fails ; not backticks because also exec the result of the command
-    $mongodb_not_inited = 'failed' in $mongodb_not_inited_generate_res
+    ##$mongodb_not_inited = 'failed' in $mongodb_not_inited_generate_res
   
-  if ($mongodb_not_inited) {
+  ##if ($mongodb_not_inited) {
     # NB. within /bin/sh else "Generators can only contain alphanumerics, file separators, and dashes"
     # see https://projects.puppetlabs.com/issues/5481
     # in and not '... | grep "failed"' == '' else Failed to execute generator... Execution... returned 1
-    notify { "MongoDB not yet inited (replset & auth admin) ! $mongodb_not_inited_generate_res": }
+    ##notify { "MongoDB not yet inited (replset & auth admin) ! $mongodb_not_inited_generate_res": }
   
     file { '/etc/mongod_prestart.conf' :
       content => template('mongodb/mongodb_prestart.conf.erb'),
@@ -80,14 +80,15 @@ class mongodb::server::init_admin {
         #echo admin user created ; echo bb `ps -ef | grep \"mongod\" | grep -v \"sudo\" | grep -v \"sh\" | grep \"pidfilepath\" | grep -v \"grep\"` ; ps -ef | grep \"mongod\" | grep -v \"sudo\" | grep -v \"sh\" | grep \"pidfilepath\" | grep -v \"grep\" | awk '{print \$2}' ; rm -f /var/lib/mongodb/mongod.lock /tmp/mongod_prestart.pid ; echo success ; exit 0",
     ######tries => 10,
     ######try_sleep => 1,
+    unless => "/usr/bin/mongo -p $admin_password -u $admin_user admin --quiet --eval \"db.getMongo()\" > /tmp/mongo_test ; cat /tmp/mongo_test | grep failed && exit 1 || exit 0", # rather than generate() which is executed on server side !
     logoutput => true,
     #timeout => 300,
     require => File['/etc/mongod_prestart.conf'],
   }
   
-  } else {
-    notify { "MongoDB already inited (replset & auth admin) ! $mongodb_not_inited_generate_res": }
-  }
+  ##} else {
+  ##  notify { "MongoDB already inited (replset & auth admin) ! $mongodb_not_inited_generate_res": }
+  ##}
   
   }
 }
