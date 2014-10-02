@@ -10,7 +10,7 @@ class mongodb::server::init_admin {
   $dbpath          = $mongodb::server::dbpath
   $pidfilepath     = $mongodb::server::pidfilepath
   $logpath         = $mongodb::server::logpath
-  #$port            = $mongodb::server::port
+  $port            = $mongodb::server::port
   $journal         = $mongodb::server::journal
   $nojournal       = $mongodb::server::nojournal
   $smallfiles      = $mongodb::server::smallfiles
