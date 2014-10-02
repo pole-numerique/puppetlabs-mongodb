@@ -181,6 +181,7 @@ Puppet::Type.type(:mongodb_replset).provide(:mongo) do
       alive_hosts = alive_members(@property_flush[:members])
       dead_hosts  = @property_flush[:members] - alive_hosts
       raise Puppet::Error, "Can't connect to any member of replicaset #{self.name}." if alive_hosts.empty?
+      raise Puppet::Error, "There are some dead hosts in replicaset #{self.name} : #{dead_hosts.inspect}, aborting ; check they are up then retry." if not dead_hosts.empty?
       Puppet.debug "Alive members: #{alive_hosts.inspect}"
       Puppet.debug "Dead members: #{dead_hosts.inspect}" unless dead_hosts.empty?
     else
