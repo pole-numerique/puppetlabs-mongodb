@@ -137,10 +137,23 @@ Puppet::Type.type(:mongodb_replset).provide(:mongo) do
   end
 
   def alive_members(hosts)
+    # guard to try to avoid "Could not evaluate: private method `select' called for nil:NilClass" :
+    #if not hosts
+    #  []
+    #end
+    is_first = true
     hosts.select do |host|
       begin
         Puppet.debug "Checking replicaset member #{host} ..."
-        status = rs_status(host)
+        if is_first
+          is_first = false
+          status = rs_status(host)
+        else
+          # assuming case of a new replset candidate member without any user yet
+          # TODO LATER rather try with then without credentials
+          status = self.class.mongo_command('admin', "rs.status()", nil, nil, host)
+          Puppet.warning("err: " + status['errmsg']);
+        end
         if status.has_key?('errmsg') and status['errmsg'] == 'not running with --replSet'
           raise Puppet::Error, "Can't configure replicaset #{self.name}, host #{host} is not supposed to be part of a replicaset."
         end
@@ -153,11 +166,16 @@ Puppet::Type.type(:mongodb_replset).provide(:mongo) do
           Puppet.debug "Host #{self.name} is available for replset #{status['set']}"
           true
         elsif status.has_key?('info')
+          Puppet.warning("new!unconf")
           Puppet.debug "Host #{self.name} is alive but unconfigured: #{status['info']}"
+          true
+        elsif status.has_key?('errmsg') and status['errmsg'] == 'not authorized on admin to execute command { replSetGetStatus: 1.0 }'
+          Puppet.warning("new!notauth")
+          # case of a new replset candidate member without any user yet
           true
         end
       rescue Puppet::ExecutionFailure
-        Puppet.warning "Can't connect to replicaset member #{host}."
+        Puppet.warning "KO Can't connect to replicaset member #{host}."
 
         false
       end
@@ -174,16 +192,17 @@ Puppet::Type.type(:mongodb_replset).provide(:mongo) do
       #end
       return
     end
-
+    
     if @property_flush[:members] and ! @property_flush[:members].empty?
-      Puppet.warning("set_members2 :")
+      Puppet.warning("Some new members...")
       # Find the alive members so we don't try to add dead members to the replset
-      alive_hosts = alive_members(@property_flush[:members])
+      alive_hosts = alive_members(@property_flush[:members]) # actually alive_new_members
       dead_hosts  = @property_flush[:members] - alive_hosts
       raise Puppet::Error, "Can't connect to any member of replicaset #{self.name}." if alive_hosts.empty?
+      # NB. could abort if any dead host :
       ##raise Puppet::Error, "There are some dead hosts in replicaset #{self.name} : #{dead_hosts.inspect}, aborting ; check they are up then retry." if not dead_hosts.empty?
-      Puppet.debug "Alive members: #{alive_hosts.inspect}"
-      Puppet.debug "Dead members: #{dead_hosts.inspect}" unless dead_hosts.empty?
+      Puppet.debug "Alive new members: #{alive_hosts.inspect}"
+      Puppet.debug "Dead new members: #{dead_hosts.inspect}" unless dead_hosts.empty?
     else
       alive_hosts = []
     end
@@ -206,10 +225,10 @@ Puppet::Type.type(:mongodb_replset).provide(:mongo) do
       isFirst = true;
       alive_hosts.each_with_index.map do |host,id|
         if isFirst
-          Puppet.warning("isFirst: " +  host)
+          Puppet.warning("Don't add first host i.e. master : " +  host)
           isFirst = false
         else
-          Puppet.warning("add: " +  host)
+          Puppet.warning("add host : " +  host)
           output = mongo_command("rs.add(\"#{host}\")", master)
           if output['ok'] == 0
             raise Puppet::Error, "rs.add() failed for replicaset #{self.name}: #{output['errmsg']}"
@@ -220,12 +239,13 @@ Puppet::Type.type(:mongodb_replset).provide(:mongo) do
     
     else
       # Add members to an existing replset
-      alive_hosts = alive_members(@property_hash[:members]) # otherwise empty if based on @property_flush
-      Puppet.warning("set_members existing alive_hosts: " + alive_hosts.inspect)
-      if master = master_host(alive_hosts) # master is in existing @property_hash and not new @property_flush
+      alive_hosts = alive_members(@property_flush[:members] || []) # actually alive_new_hosts since contains only new members
+      alive_existing_hosts = alive_members(@property_hash[:members] || [])
+      Puppet.warning("set_members existing & new alive hosts & hash vs flush : " + alive_existing_hosts.inspect + " " + alive_hosts.inspect + " " + @property_hash.inspect + " " + @property_flush.inspect)
+      if master = master_host(alive_existing_hosts) # master is in existing @property_hash and not new @property_flush !
         current_hosts = db_ismaster(master)['hosts']
-        newhosts = alive_hosts - current_hosts
-        Puppet.warning("set_members m+c+n: " + master + " " + current_hosts.inspect + " " + newhosts.inspect)
+        newhosts = alive_hosts + alive_existing_hosts - current_hosts # alive_hosts are only new hosts since come from @property_flush !
+        Puppet.warning("set_members m+c+a+e+n: " + master + " " + current_hosts.inspect + " " + alive_hosts.inspect + " " + alive_existing_hosts.inspect + " " + newhosts.inspect)
         newhosts.each do |host|
           output = rs_add(host, master)
           if output['ok'] == 0
@@ -255,8 +275,8 @@ Puppet::Type.type(:mongodb_replset).provide(:mongo) do
       args << ['--host',host] if host
       args << ['-u',admin_user, '-p', admin_password] if admin_user
       args << ['--eval',"printjson(#{command})"]
-      Puppet.warning("mongo: " + args.flatten.inspect)
-      output = mongo(args.flatten)
+      Puppet.warning("mongo : " + args.flatten.inspect)
+      output = mongo(args.flatten) || '' # this "else" to try to avoid "can't convert nil into String"
       Puppet.warning("output: " + output)
     rescue Puppet::ExecutionFailure => e
       if e =~ /Error: couldn't connect to server/ and wait <= 2**max_wait
@@ -268,15 +288,19 @@ Puppet::Type.type(:mongodb_replset).provide(:mongo) do
         Puppet.warning("output: " + output)
         raise
       end
-    rescue Mongo::ConnectionError => e
-      Puppet.warning('connection error : ' + e);
+    #rescue Mongo::ConnectionError => e
+    # trying to catch auth errors to try again without credentials but alas to no avail : (case of a new replset member)
+    rescue Exception
+      Puppet.warning('connection error : ')
+      #Puppet.warning(ex)
       if admin_user
-        Puppet.warning('trying again without credentials (may be a new replset member without any...)');
-        mongo_command(db, command, nil, nil, host)
+        Puppet.warning('trying again without credentials (may be a new replset member without any...)')
+        mongo_command(db => db, command => command, host => host)
       else
         raise
       end
     end
+    Puppet.debug('cleaning output...')
 
     # Dirty hack to remove JavaScript objects
     output.gsub!(/ISODate\((.+?)\)/, '\1 ')
